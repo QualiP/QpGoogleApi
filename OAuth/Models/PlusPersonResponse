@@ -1,3 +1,12 @@
+/*
+    Date      :     Monday, June 13, 2016
+    Author    :     QualiP (https://github.com/QualiP)
+    Objective :     
+    Version   :     1.0
+*/
+
+
+
 using Newtonsoft.Json;
 
 namespace QPGoogleAPI.OAuth.Models
