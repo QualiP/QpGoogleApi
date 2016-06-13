@@ -8,7 +8,6 @@
 
 
 
-
 using Newtonsoft.Json;
 using QPGoogleAPI.OAuth.Models;
 using QPLib.Base;
@@ -31,13 +30,16 @@ namespace QPGoogleAPI.OAuth.Flows
 {
     ///
     /// <summary>
-    /// Stores multiple users, with the first user within the vault as
-    /// the default user.
+    /// Implements the complete OAuth installed flow for any of Google's services, automatically manages
+    /// use of a user's refresh token and revocation requests to Google.
     /// </summary>
     /// 
 
     ///
     /// <remarks>
+    ///
+    /// Stores multiple users, with the first user within the vault as the default user.
+    ///
     /// Storing tokens (securely):
     /// <see cref="https://msdn.microsoft.com/en-us/library/windows/apps/windows.security.credentials.passwordvault.aspx"/>
     /// <see cref="https://msdn.microsoft.com/en-us/library/windows/apps/hh701231.aspx"/>
