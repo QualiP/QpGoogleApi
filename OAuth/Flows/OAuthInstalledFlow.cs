@@ -1,6 +1,6 @@
 /*
     Date      :     Monday, June 13, 2016
-    Author    :     QualiP (https://github.com/QualiP)
+    Author    :     pdcdeveloper (https://github.com/pdcdeveloper)
     Objective :     Implements the complete OAuth installed flow for any of Google's services, automatically manages
                     use of a user's refresh token and revocation requests to Google.
     Version   :     1.0
