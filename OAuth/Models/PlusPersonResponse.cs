@@ -1,6 +1,6 @@
 /*
     Date      :     Monday, June 13, 2016
-    Author    :     QualiP (https://github.com/QualiP)
+    Author    :     pdcdeveloper (https://github.com/pdcdeveloper)
     Objective :     
     Version   :     1.0
 */
