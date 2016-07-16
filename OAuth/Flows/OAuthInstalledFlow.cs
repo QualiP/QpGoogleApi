@@ -86,6 +86,10 @@ namespace QPGoogleAPI.OAuth.Flows
     /// Update 2016-06-13:
     ///     Currently, only asks for YouTube, Profile and Email scopes.
     /// 
+    /// Update 2016-06-27:
+    ///     Consolidated preperation of AuthorizedUser to PasswordCredential and
+    ///     PasswordCredential to AuthorizedUser.
+    ///
     /// </updates>
     ///
     public class OAuthInstalledFlow : NotifyPropertyChangedBase
@@ -94,15 +98,13 @@ namespace QPGoogleAPI.OAuth.Flows
         static readonly string APP_NAME = Application.Current.ToString();
 
 
-
+        
 
 
         //
         // Installed secrets path
         //
-        const string INSTALLED_FLOW_SECRETS_PATH = @"ms-appx:///YOUR_CLIENT_SECRETS.json";
-
-
+        const string INSTALLED_FLOW_SECRETS_PATH = @"ms-appx:///client_secret.json";
 
 
 
@@ -131,7 +133,7 @@ namespace QPGoogleAPI.OAuth.Flows
         //
         // Space delimited
         //
-        const string AUTHENTICATION_SCOPES 
+        const string AUTHENTICATION_SCOPES
             = YOUTUBE_SCOPE + @" "
             + PROFILE_SCOPE + @" "
             + EMAIL_SCOPE;
@@ -144,7 +146,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region rest api calls
+#region rest api calls
         //
         // Revocation -- requires the token parameter
         //
@@ -155,7 +157,7 @@ namespace QPGoogleAPI.OAuth.Flows
         // Use with either PROFILE_SCOPE or EMAIL_SCOPE.
         //
         const string USER_INFO_API_URL = @"https://www.googleapis.com/oauth2/v2/userinfo";
-        #endregion
+#endregion
 
 
 
@@ -190,7 +192,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
         //
-        // Easy for the view and gets rid of repetitive checks
+        // Makes it easier for the view and gets rid of repetitive checks
         //
         static BitmapImage _profileImage = null;
         public BitmapImage ProfileImage
@@ -231,10 +233,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        //
-        // This is the current user.
-        // Use the token helpers instead of accessing this property directly.
-        //
+
         static AuthorizedUser _authorizedUser = null;
         [DisplayAttribute(Name = "AuthorizedUser")]
         public AuthorizedUser AuthorizedUser
@@ -284,9 +283,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        //
-        // To do:  an actual try-catch block
-        //
+
         AuthorizedUser TryGetDefaultAuthorizedUser()
         {
             //if (_authorizedUser != null)
@@ -313,43 +310,56 @@ namespace QPGoogleAPI.OAuth.Flows
                 return null;
 
 
-            //
-            // Prep a new user
-            //
-            AuthorizedUser user = new AuthorizedUser();
 
-            //
-            // Password
-            //
-            cred.RetrievePassword();
-            if (!string.IsNullOrEmpty(cred.Password))
-            {
-                user.AccessToken = cred.Password.Split(',').ElementAt(0);
-                user.RefreshToken = cred.Password.Split(',').ElementAt(1);
-                user.ExpiresIn = int.Parse(cred.Password.Split(',').ElementAt(2));
-                user.DateAcquiredUtc = DateTime.Parse(cred.Password.Split(',').ElementAt(3));
-            }
+            #region v1
+            ////
+            //// Prep a new user
+            ////
+            //AuthorizedUser user = new AuthorizedUser();
 
-
-
-            //
-            // Resource
-            //
-            if (!string.IsNullOrEmpty(cred.Resource) && cred.Resource.Split(',').ElementAt(0).Contains(APP_NAME))
-            {
-                user.TokenType = cred.Resource.Split(',').ElementAt(1);
-            }
+            ////
+            //// Password
+            ////
+            //cred.RetrievePassword();
+            //if (!string.IsNullOrEmpty(cred.Password))
+            //{
+            //    user.AccessToken = cred.Password.Split(',').ElementAt(0);
+            //    user.RefreshToken = cred.Password.Split(',').ElementAt(1);
+            //    user.ExpiresIn = int.Parse(cred.Password.Split(',').ElementAt(2));
+            //    user.DateAcquiredUtc = DateTime.Parse(cred.Password.Split(',').ElementAt(3));
+            //}
 
 
-            //
-            // UserName
-            //
-            if (!string.IsNullOrEmpty(cred.UserName))
-            {
-                user.DisplayName = cred.UserName.Split(',').ElementAt(0);
-                user.Id = cred.UserName.Split(',').ElementAt(1);
-                user.ProfileImageUrl = cred.UserName.Split(',').ElementAt(2);
-            }
+
+            ////
+            //// Resource
+            ////
+            //if (!string.IsNullOrEmpty(cred.Resource) && cred.Resource.Split(',').ElementAt(0).Contains(APP_NAME))
+            //{
+            //    user.TokenType = cred.Resource.Split(',').ElementAt(1);
+            //}
+
+
+
+            //var s = cred.Resource.Split(',');
+            //if (s.Length > 2)
+            //    user.Email = cred.Resource.Split(',').ElementAt(2);
+
+
+            ////
+            //// UserName
+            ////
+            //if (!string.IsNullOrEmpty(cred.UserName))
+            //{
+            //    user.DisplayName = cred.UserName.Split(',').ElementAt(0);
+            //    user.Id = cred.UserName.Split(',').ElementAt(1);
+            //    user.ProfileImageUrl = cred.UserName.Split(',').ElementAt(2);
+            //}
+            #endregion
+
+            #region v2
+            AuthorizedUser user = this.PasswordCredentialToAuthorizedUser(cred);
+            #endregion
 
 
             //
@@ -450,13 +460,13 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region public functionality
+#region public functionality
 
 
         public async Task LoginAsync()
         {
             //
-            // Ask the user to authenticate by bringing up the broker
+            // Ask the user to authenticate by bringing up the web view
             //
             string authorizationToken = await this.TryGetAuthorizationTokenAsync();
             if (string.IsNullOrEmpty(authorizationToken))
@@ -484,32 +494,46 @@ namespace QPGoogleAPI.OAuth.Flows
             // Always compare by id, never by name.
             //
             PasswordVault vault = new PasswordVault();
-            IReadOnlyList<PasswordCredential> credentials = null;
-            if (!string.IsNullOrEmpty(credential.UserName))
-            {
-                string id = credential.UserName.Split(',').ElementAt(1);
+            #region v1
+            //IReadOnlyList<PasswordCredential> credentials = null;
+            //if (!string.IsNullOrEmpty(credential.UserName))
+            //{
+            //    string id = credential.UserName.Split(',').ElementAt(1);
 
-                credentials = vault.RetrieveAll();
-                if (credentials != null && credentials.Count > 0)
-                    foreach (var cred in credentials)
-                    {
-                        if (string.IsNullOrEmpty(cred.UserName))
-                            continue;
+            //    credentials = vault.RetrieveAll();
+            //    if (credentials != null && credentials.Count > 0)
+            //        foreach (var cred in credentials)
+            //        {
+            //            if (string.IsNullOrEmpty(cred.UserName))
+            //                continue;
 
-                        string credId = cred.UserName.Split(',').ElementAt(1);
-                        if (credId == id)
-                        {
-                            cred.RetrievePassword();
-                            string accessToken = cred.Password.Split(',').ElementAt(0);
+            //            //
+            //            // UserInfo
+            //            //
+            //            string credId = cred.UserName.Split(',').ElementAt(1);
+            //            if (credId == id)
+            //            {
+            //                cred.RetrievePassword();
+            //                string accessToken = cred.Password.Split(',').ElementAt(0);
 
-                            //
-                            // Revoke, remove from the vault, and from the view, if applicable
-                            //
-                            await this.RevokeTokensAsync(accessToken);
-                            break;
-                        }
-                    }
-            }
+            //                //
+            //                // Revoke, remove from the vault, and from the view, if applicable
+            //                //
+            //                await this.RevokeTokensAsync(accessToken);
+            //                break;
+            //            }
+            //        }
+            //}
+            #endregion
+
+            #region v2
+            bool userExists = await this.TryRemoveExistingUser(credential); // the return value is currently unused
+
+#if DEBUG
+            if (userExists)
+                Debug.WriteLine("Duplicate user removed from the password vault.");
+#endif
+            #endregion
 
 
 
@@ -529,30 +553,45 @@ namespace QPGoogleAPI.OAuth.Flows
             //
             // Fill out a new authorized user
             //
-            AuthorizedUser user = new AuthorizedUser();
+            #region v1
+            //AuthorizedUser user = new AuthorizedUser();
 
-            //
-            // Password
-            //
-            user.AccessToken = credential.Password.Split(',').ElementAt(0);
-            user.RefreshToken = credential.Password.Split(',').ElementAt(1);
-            user.ExpiresIn = int.Parse(credential.Password.Split(',').ElementAt(2));
-            user.DateAcquiredUtc = DateTime.Parse(credential.Password.Split(',').ElementAt(3));
 
-            //
-            // Resource
-            //
-            user.TokenType = credential.Resource.Split(',').ElementAt(1);
 
-            //
-            // UserName
-            //
-            if (!string.IsNullOrEmpty(credential.UserName))
-            {
-                user.DisplayName = credential.UserName.Split(',').ElementAt(0);
-                user.Id = credential.UserName.Split(',').ElementAt(1);
-                user.ProfileImageUrl = credential.UserName.Split(',').ElementAt(2);
-            }
+            ////
+            //// Password
+            ////
+            //user.AccessToken = credential.Password.Split(',').ElementAt(0);
+            //user.RefreshToken = credential.Password.Split(',').ElementAt(1);
+            //user.ExpiresIn = int.Parse(credential.Password.Split(',').ElementAt(2));
+            //user.DateAcquiredUtc = DateTime.Parse(credential.Password.Split(',').ElementAt(3));
+
+            ////
+            //// Resource
+            ////
+            //user.TokenType = credential.Resource.Split(',').ElementAt(1);
+
+
+            //var s = credential.Resource.Split(',');
+            //if (s.Length > 2)
+            //    user.Email = credential.Resource.Split(',').ElementAt(2);
+
+            ////
+            //// UserName
+            ////
+            //if (!string.IsNullOrEmpty(credential.UserName))
+            //{
+            //    user.DisplayName = credential.UserName.Split(',').ElementAt(0);
+            //    user.Id = credential.UserName.Split(',').ElementAt(1);
+            //    user.ProfileImageUrl = credential.UserName.Split(',').ElementAt(2);
+            //}
+            #endregion
+
+
+
+            #region v2
+            AuthorizedUser user = this.PasswordCredentialToAuthorizedUser(credential);
+            #endregion
 
 
 
@@ -626,7 +665,7 @@ namespace QPGoogleAPI.OAuth.Flows
             //
             PasswordVault vault = new PasswordVault();
             IReadOnlyList<PasswordCredential> credentials = vault.RetrieveAll();
-            if (credentials?.Count > 0)
+            if (credentials != null && credentials.Count > 0)
             {
                 //
                 // Try revoking by id
@@ -852,35 +891,47 @@ namespace QPGoogleAPI.OAuth.Flows
             //
             // Refresh the credential within the vault with a new PasswordCredential
             //
-            PasswordCredential credential = new PasswordCredential();
-            DateTime dateAcquiredUtc = DateTime.UtcNow;
+            #region v1
+            //PasswordCredential credential = new PasswordCredential();
+            //DateTime dateAcquiredUtc = DateTime.UtcNow;
 
-            //
-            // Password
-            //
-            credential.Password
-                = oauthTokens.AccessToken
-                + ',' + user.RefreshToken
-                + ',' + oauthTokens.ExpiresIn.ToString()
-                + ',' + dateAcquiredUtc.ToString();
+            ////
+            //// Password
+            ////
+            //credential.Password
+            //    = oauthTokens.AccessToken
+            //    + ',' + user.RefreshToken
+            //    + ',' + oauthTokens.ExpiresIn.ToString()
+            //    + ',' + dateAcquiredUtc.ToString();
 
-            //
-            // Resource
-            //
-            credential.Resource
-                = APP_NAME
-                + ',' + oauthTokens.TokenType;
+            ////
+            //// Resource
+            ////
+            //credential.Resource
+            //    = APP_NAME
+            //    + ',' + oauthTokens.TokenType;
 
-            //
-            // UserName
-            //
-            if (!string.IsNullOrEmpty(user.DisplayName))
-            {
-                credential.UserName
-                    = user.DisplayName
-                    + ',' + user.Id
-                    + ',' + user.ProfileImageUrl;
-            }
+            ////
+            ////
+            ////
+            //if (!string.IsNullOrEmpty(user.Email))
+            //    credential.Resource += ',' + user.Email;
+
+            ////
+            //// UserName
+            ////
+            //if (!string.IsNullOrEmpty(user.DisplayName))
+            //{
+            //    credential.UserName
+            //        = user.DisplayName
+            //        + ',' + user.Id
+            //        + ',' + user.ProfileImageUrl;
+            //}
+            #endregion
+
+            #region v2
+            PasswordCredential credential = this.AuthorizedUserToPasswordCredential(user, oauthTokens);
+            #endregion
 
 
 
@@ -919,41 +970,53 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-//#if DEBUG
-//            credentials = vault.RetrieveAll();
-//            if (credentials != null && credentials.Count > 0)
-//                foreach (var cred in credentials)
-//                {
-//                    cred.RetrievePassword();
-//                    if (!string.IsNullOrEmpty(cred.Password))
-//                        if (cred.Password.Contains(user.RefreshToken))
-//                        {
-//                            Debug.WriteLine(Environment.NewLine);
-//                            Debug.WriteLine("Checking if the credential has been updated:");
-//                            Debug.WriteLine(cred.Password.Split(',').ElementAt(0));
-//                            Debug.WriteLine(cred.Password.Split(',').ElementAt(1));
-//                            Debug.WriteLine(cred.Password.Split(',').ElementAt(2));
-//                            Debug.WriteLine(cred.Password.Split(',').ElementAt(3));
-//                            Debug.WriteLine(Environment.NewLine);
-//                            break;
-//                        }
-//                }
-//#endif
+            //#if DEBUG
+            //            credentials = vault.RetrieveAll();
+            //            if (credentials != null && credentials.Count > 0)
+            //                foreach (var cred in credentials)
+            //                {
+            //                    cred.RetrievePassword();
+            //                    if (!string.IsNullOrEmpty(cred.Password))
+            //                        if (cred.Password.Contains(user.RefreshToken))
+            //                        {
+            //                            Debug.WriteLine(Environment.NewLine);
+            //                            Debug.WriteLine("Checking if the credential has been updated:");
+            //                            Debug.WriteLine(cred.Password.Split(',').ElementAt(0));
+            //                            Debug.WriteLine(cred.Password.Split(',').ElementAt(1));
+            //                            Debug.WriteLine(cred.Password.Split(',').ElementAt(2));
+            //                            Debug.WriteLine(cred.Password.Split(',').ElementAt(3));
+            //                            Debug.WriteLine(Environment.NewLine);
+            //                            break;
+            //                        }
+            //                }
+            //#endif
+
 
 
             //
             // Refresh _authorizedUser, if applicable
             //
-            if (_authorizedUser != null && _authorizedUser.RefreshToken == user.RefreshToken)
-            {
-                //
-                // The view gets updated implicitly -- AuthorizedUser implements NotifyPropertyChangedBase for each of its properties
-                //
-                _authorizedUser.AccessToken = oauthTokens.AccessToken;
-                _authorizedUser.ExpiresIn = oauthTokens.ExpiresIn;
-                _authorizedUser.TokenType = oauthTokens.TokenType;
-                _authorizedUser.DateAcquiredUtc = dateAcquiredUtc;
-            }
+
+            #region v1
+            //if (_authorizedUser != null && _authorizedUser.RefreshToken == user.RefreshToken)
+            //{
+            //    //
+            //    // The view gets updated implicitly -- AuthorizedUser implements NotifyPropertyChangedBase for each of its properties
+            //    //
+            //    _authorizedUser.AccessToken = oauthTokens.AccessToken;
+            //    _authorizedUser.ExpiresIn = oauthTokens.ExpiresIn;
+            //    _authorizedUser.TokenType = oauthTokens.TokenType;
+            //    _authorizedUser.DateAcquiredUtc = dateAcquiredUtc;
+            //}
+            #endregion
+
+            #region v2
+            AuthorizedUser = this.PasswordCredentialToAuthorizedUser(credential);
+            #endregion
+
+#if DEBUG
+            Debug.WriteLine("AuthorizedUser has been refreshed.");
+#endif
         }
 
 
@@ -979,6 +1042,11 @@ namespace QPGoogleAPI.OAuth.Flows
             // Build a AuthorizedUser object from the Password credential,
             // then call the overload.
             //
+
+            //
+            // Untested
+            //
+            await this.UseRefreshToken(this.PasswordCredentialToAuthorizedUser(credential));
         }
 
 
@@ -1083,32 +1151,47 @@ namespace QPGoogleAPI.OAuth.Flows
             //
             // Build an AuthorizedUser
             //
-            AuthorizedUser user = new AuthorizedUser();
+
+            #region v1
+            //AuthorizedUser user = new AuthorizedUser();
 
 
 
-            //
-            // Password
-            //
-            user.AccessToken = credential.Password.Split(',').ElementAt(0);
-            user.RefreshToken = credential.Password.Split(',').ElementAt(1);
-            user.ExpiresIn = int.Parse(credential.Password.Split(',').ElementAt(2));
-            user.DateAcquiredUtc = DateTime.Parse(credential.Password.Split(',').ElementAt(3));
+            ////
+            //// Password
+            ////
+            //user.AccessToken = credential.Password.Split(',').ElementAt(0);
+            //user.RefreshToken = credential.Password.Split(',').ElementAt(1);
+            //user.ExpiresIn = int.Parse(credential.Password.Split(',').ElementAt(2));
+            //user.DateAcquiredUtc = DateTime.Parse(credential.Password.Split(',').ElementAt(3));
 
-            //
-            // Resource
-            //
-            user.TokenType = credential.Resource.Split(',').ElementAt(1);
+            ////
+            //// Resource
+            ////
+            //user.TokenType = credential.Resource.Split(',').ElementAt(1);
 
-            //
-            // UserName
-            //
-            if (!string.IsNullOrEmpty(credential.UserName))
-            {
-                user.DisplayName = credential.UserName.Split(',').ElementAt(0);
-                user.Id = credential.UserName.Split(',').ElementAt(1);
-                user.ProfileImageUrl = credential.UserName.Split(',').ElementAt(2);
-            }
+            ////
+            //var s = credential.Resource.Split(',');
+            //if (s.Length > 2)
+            //    user.Email = credential.Resource.Split(',').ElementAt(2);
+
+            ////
+            //// UserName
+            ////
+            //if (!string.IsNullOrEmpty(credential.UserName))
+            //{
+            //    user.DisplayName = credential.UserName.Split(',').ElementAt(0);
+            //    user.Id = credential.UserName.Split(',').ElementAt(1);
+            //    user.ProfileImageUrl = credential.UserName.Split(',').ElementAt(2);
+            //}
+            #endregion
+
+
+            #region v2
+            AuthorizedUser user = this.PasswordCredentialToAuthorizedUser(credential);
+            #endregion
+
+
 
             //
             // Change the user to propagate property changes
@@ -1196,7 +1279,7 @@ namespace QPGoogleAPI.OAuth.Flows
             await this.RevokeTokensAsync(tokens);
         }
 
-        #endregion
+#endregion
 
 
 
@@ -1248,7 +1331,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region helpers
+#region helpers
         public virtual string AccessTokenHelper()
         {
             if (AuthorizedUser != null)
@@ -1264,8 +1347,14 @@ namespace QPGoogleAPI.OAuth.Flows
                 if (AuthorizedUser.IsAccessTokenExpired)
                     await UseRefreshToken(AuthorizedUser);
         }
-        #endregion
 
+        public virtual async Task RefreshTokenHelper(bool forceRefresh)
+        {
+            if (AuthorizedUser != null)
+                if (AuthorizedUser.IsAccessTokenExpired || forceRefresh)
+                    await UseRefreshToken(AuthorizedUser);
+        }
+#endregion
 
 
 
@@ -1408,7 +1497,8 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region developer console
+
+#region developer console
         static InstalledFlowSecrets _developerSecrets = null;
         async Task<InstalledFlowSecrets> GetInstalledFlowSecretsAsync()
         {
@@ -1432,7 +1522,7 @@ namespace QPGoogleAPI.OAuth.Flows
             _developerSecrets = secrets;
             return _developerSecrets;
         }
-        #endregion
+#endregion
 
 
 
@@ -1538,7 +1628,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region authentication && authorization
+#region authentication && authorization
         //
         // Returns an authentication token, which will be consumed by TryExchangeForAccessTokensAsync(string).
         // This will bring up a web view.
@@ -1759,7 +1849,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
             using (HttpClient client = new HttpClient())
             {
-                #region authorization
+#region authorization
                 Uri tokenUri = new Uri(secrets.Installed.TokenUri, UriKind.Absolute);
 
                 //
@@ -1786,15 +1876,15 @@ namespace QPGoogleAPI.OAuth.Flows
                 // Retry
                 //
                 int retryCount = 2;
-                while ((tokenResponse == null || !tokenResponse.IsSuccessStatusCode) & retryCount > 1)
+                while ((tokenResponse == null || !tokenResponse.IsSuccessStatusCode) & retryCount-- > 1)    // disable short circuit with single ampersand
                 {
 #if DEBUG
-                    if (retryCount != 2)
+                    if (retryCount != 1)
                         Debug.WriteLine("Retrying tokenResponse = await client.PostAsync(tokenUri, body)...");
 #endif
 
                     tokenResponse = await client.PostAsync(tokenUri, body);
-                    --retryCount;
+                    //--retryCount; // use post decrement check
                 }
 
                 //
@@ -1805,7 +1895,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
                 //
-                // Deserialize the JSON result
+                // Deserialize the JSON result for the oauth tokens
                 //
                 string jsonTokens = await tokenResponse.Content.ReadAsStringAsync();
                 oauthTokens = JsonConvert.DeserializeObject<OAuthTokenResponse>(jsonTokens);
@@ -1819,26 +1909,8 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-                //
-                // Start building the PasswordCredential
-                //
-
-                //
-                // Resource
-                //
-                credential.Resource 
-                    = APP_NAME 
-                    + ',' + oauthTokens.TokenType;
-
-                //
-                // Password
-                //
-                credential.Password
-                    = oauthTokens.AccessToken
-                    + ',' + oauthTokens.RefreshToken
-                    + ',' + oauthTokens.ExpiresIn.ToString()
-                    + ',' + DateTime.UtcNow.ToString();
-                #endregion
+                
+#endregion
 
 
 
@@ -1870,37 +1942,90 @@ namespace QPGoogleAPI.OAuth.Flows
                 // Retry
                 //
                 retryCount = 2;
-                while ((userInfoResponse == null || !userInfoResponse.IsSuccessStatusCode) & retryCount > 1)
+                while ((userInfoResponse == null || !userInfoResponse.IsSuccessStatusCode) & retryCount-- > 1)    // disable short circuit with single ampersand
                 {
 #if DEBUG
-                    if (retryCount != 2)
+                    if (retryCount != 1)
                         Debug.WriteLine("Retrying userInfoResponse = await client.GetAsync(userInfoUri)...");
 #endif
 
                     userInfoResponse = await client.GetAsync(userInfoUri);
-                    --retryCount;
+                    //--retryCount; // use post decrement check
                 }
 
-                //
-                // Finish the prep on the PasswordCredential
-                //
                 if (userInfoResponse != null && userInfoResponse.IsSuccessStatusCode)
                 {
                     string jsonUserInfo = await userInfoResponse.Content.ReadAsStringAsync();
                     userInfo = JsonConvert.DeserializeObject<UserInfoResponse>(jsonUserInfo);
-
-                    if (userInfo != null)
-                    {
-                        //
-                        // UserName
-                        //
-                        credential.UserName
-                            = userInfo.GivenName
-                            + ',' + userInfo.Id
-                            + ',' + userInfo.Picture;
-                    }
                 }
+
                 #endregion
+
+
+
+
+                #region v1
+                ////
+                //// Start building the PasswordCredential
+                ////
+
+                ////
+                //// Resource
+                ////
+                //credential.Resource
+                //    = APP_NAME
+                //    + ',' + oauthTokens.TokenType;
+
+                ////
+                //// Password
+                ////
+                //credential.Password
+                //    = oauthTokens.AccessToken
+                //    + ',' + oauthTokens.RefreshToken
+                //    + ',' + oauthTokens.ExpiresIn.ToString()
+                //    + ',' + DateTime.UtcNow.ToString();
+
+
+
+                ////
+                //// Finish the prep on the PasswordCredential
+                ////
+                //if (userInfoResponse != null && userInfoResponse.IsSuccessStatusCode)
+                //{
+                //    string jsonUserInfo = await userInfoResponse.Content.ReadAsStringAsync();
+                //    userInfo = JsonConvert.DeserializeObject<UserInfoResponse>(jsonUserInfo);
+
+                //    if (userInfo != null)
+                //    {
+                //        //
+                //        // UserName
+                //        //
+                //        credential.UserName
+                //            = userInfo.GivenName
+                //            + ',' + userInfo.Id
+                //            + ',' + userInfo.Picture;
+
+                //        //
+                //        // Email
+                //        //
+                //        if (!string.IsNullOrEmpty(userInfo.Email))
+                //            credential.Resource += ',' + userInfo.Email;
+                //    }
+                //}
+                #endregion
+
+
+
+                #region v2
+                //if (oauthTokens != null)  // not necessary
+                    this.ResponseToPasswordCredential(oauthTokens, ref credential);
+
+                if (userInfo != null)
+                    this.ResponseToPasswordCredential(userInfo, ref credential);
+                #endregion
+
+
+
             }
 
 
@@ -1913,7 +2038,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
             return credential;
         }
-        #endregion
+#endregion
 
 
 
@@ -2018,7 +2143,7 @@ namespace QPGoogleAPI.OAuth.Flows
 
 
 
-        #region revocation
+#region revocation
         ///
         /// <summary>
         /// Revocate by passing in access or refresh tokens.  This also removes
@@ -2120,6 +2245,331 @@ namespace QPGoogleAPI.OAuth.Flows
         }
 
         #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #region consolidation
+        //
+        // How PasswordCredential is stored (with PlusPersonResponse):
+        //     PasswordCredential.UserName = "PlusPersonResponse.DisplayName,PlusPersonResponse.Id,PlusPersonResponse.ProfileImageUrl"
+        //     PasswordCredential.Resource = "APP_NAME,TokenResponse.TokenType,PlusPersonResponse.Emails[0].Value"
+        //     PasswordCredential.Password = "TokenResponse.AccessToken,TokenResponse.RefreshToken,TokenResponse.ExpiresIn.ToString(),DateTime.UtcNow.ToString()"
+        //     
+        // How PasswordCredential is stored (with UserInfoResponse):   // this is the current usage model
+        //     PasswordCredential.UserName = "UserInfoResponse.GivenName,UserInfoResponse.Id,UserInfoResponse.Picture"
+        //     PasswordCredential.Resource = "APP_NAME,TokenResponse.TokenType,UserInfoResponse.Email"
+        //     PasswordCredential.Password = "TokenResponse.AccessToken,TokenResponse.RefreshToken,TokenResponse.ExpiresIn.ToString(),DateTime.UtcNow.ToString()"
+        //
+
+
+        AuthorizedUser PasswordCredentialToAuthorizedUser(PasswordCredential credential)
+        {
+            AuthorizedUser user = new AuthorizedUser();
+
+
+            //
+            // Password
+            //
+            credential.RetrievePassword();
+            if (!string.IsNullOrEmpty(credential.Password))
+            {
+                //
+                // OAuthToken
+                //
+                var s = credential.Password.Split(',').ToList();
+
+                user.AccessToken = s[0];
+                user.RefreshToken = s[1];
+                user.ExpiresIn = int.Parse(s[2]);
+                user.DateAcquiredUtc = DateTime.Parse(s[3]);
+            }
+
+
+
+            //
+            // Resource
+            //
+            if (!string.IsNullOrEmpty(credential.Resource))
+            {
+                var s = credential.Resource.Split(',').ToList();
+                if (s[0].Contains(APP_NAME))
+                {
+                    //
+                    // OAuthToken
+                    //
+                    user.TokenType = s[1];
+
+                    //
+                    // UserInfo
+                    //
+                    if (s.Count > 2)
+                        user.Email = s[2];
+                }
+            }
+
+
+
+
+
+            //
+            // UserName
+            //
+            if (!string.IsNullOrEmpty(credential.UserName))
+            {
+                var s = credential.UserName.Split(',').ToList();
+
+                //
+                // UserInfo
+                //
+                user.DisplayName = s[0];
+                user.Id = s[1];
+                user.ProfileImageUrl = s[2];
+            }
+
+
+
+            return user;
+        }
+
+
+
+
+
+
+
+
+
+
+        //
+        //
+        //
+        //PasswordCredential AuthorizedUserToPasswordCredential(AuthorizedUser user)
+        //{
+        //    PasswordCredential credential = new PasswordCredential();
+
+
+        //    //
+        //    // OAuthToken
+        //    //
+
+
+
+
+        //    return credential;
+        //}
+
+
+
+
+        //
+        // When you just used a refresh token for the current authorized user
+        //
+        PasswordCredential AuthorizedUserToPasswordCredential(AuthorizedUser user, OAuthTokenResponse response)
+        {
+            PasswordCredential cred = new PasswordCredential();
+
+            #region OAuthToken
+            cred.Password
+                = response.AccessToken
+                + ',' + user.RefreshToken
+                + ',' + response.ExpiresIn.ToString()
+                + ',' + DateTime.UtcNow.ToString();
+
+            cred.Resource
+                = APP_NAME
+                + ',' + response.TokenType;
+            #endregion
+
+
+
+            #region UserInfo
+            if (!string.IsNullOrEmpty(user.Email))
+                cred.Resource += ',' + user.Email;
+
+            if (!string.IsNullOrEmpty(user.DisplayName))
+            {
+                cred.UserName
+                    = user.DisplayName
+                    + ',' + user.Id
+                    + ',' + user.ProfileImageUrl;
+            }
+            #endregion
+
+            return cred;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #region PasswordCredential from a response
+        //
+        // Call order ->
+        //      OAuthTokenResponse
+        //      UserInfoResponse
+        //
+        // Yes, I know this is unsavory.
+        //
+
+        void ResponseToPasswordCredential(OAuthTokenResponse response, ref PasswordCredential cred)
+        {
+            //
+            // Resource
+            //
+            cred.Resource
+                = APP_NAME
+                + ',' + response.TokenType;
+
+            //
+            // Password
+            //
+            cred.Password
+                = response.AccessToken
+                + ',' + response.RefreshToken
+                + ',' + response.ExpiresIn.ToString()
+                + ',' + DateTime.UtcNow.ToString();
+        }
+
+        void ResponseToPasswordCredential(UserInfoResponse response, ref PasswordCredential cred)
+        {
+            //
+            // UserName
+            //
+            cred.UserName
+                = response.GivenName
+                + ',' + response.Id
+                + ',' + response.Picture;
+
+            //
+            // Resource
+            //
+            if (!string.IsNullOrEmpty(response.Email))
+                cred.Resource += ',' + response.Email;
+        }
+        #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //
+        // Check if the user already exists before storing in the vault.
+        // Always compare by id, never by name.
+        //
+        async Task<bool> TryRemoveExistingUser(PasswordCredential credential)
+        {
+            string id = credential.UserName.Split(',').ElementAt(1);
+            PasswordVault vault = new PasswordVault();
+            IReadOnlyList<PasswordCredential> credentials = vault.RetrieveAll();
+
+            if (credentials != null && credentials.Count > 0)
+                foreach (var cred in credentials)
+                {
+                    if (string.IsNullOrEmpty(cred.UserName))
+                        continue;
+
+                    string credId = cred.UserName.Split(',').ElementAt(1);
+                    if (id == credId)
+                    {
+                        cred.RetrievePassword();
+                        string accessToken = cred.Password.Split(',').ElementAt(0);
+
+                        //
+                        // Revoke, remove from the vault, and from the view, if applicable
+                        //
+                        await this.RevokeTokensAsync(accessToken);
+                        return true;
+                    }
+                }
+
+            //
+            // Fall through
+            //
+            return false;
+        }
+        #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
